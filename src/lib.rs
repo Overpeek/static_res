@@ -4,7 +4,7 @@ use proc_macro::TokenStream as TokenStream1;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use std::{collections::HashMap, ffi::OsString};
-use syn::{parse_macro_input, AttributeArgs, ItemMod, Lit, NestedMeta, VisPublic, Visibility};
+use syn::{parse_macro_input, AttributeArgs, Lit, NestedMeta};
 
 fn convert_string_to_ident(string: &str) -> Ident {
     let string = string.replace(".", "_");
@@ -18,7 +18,6 @@ struct Directory {
     name: OsString,
     dirs: HashMap<OsString, Directory>,
     files: HashMap<OsString, DirEntry>,
-    vis: Option<Visibility>,
 }
 
 impl ToTokens for Directory {
@@ -27,9 +26,12 @@ impl ToTokens for Directory {
         let mut files = quote! {};
 
         for (_, dir) in self.dirs.iter() {
+            let name = convert_string_to_ident(dir.name.to_string_lossy().as_ref());
             dirs = quote! {
                 #dirs
-                #dir
+                pub mod #name {
+                    #dir
+                }
             };
         }
 
@@ -43,17 +45,9 @@ impl ToTokens for Directory {
             };
         }
 
-        let name = convert_string_to_ident(&self.name.to_string_lossy());
-        let vis = self.vis.clone().unwrap_or_else(|| {
-            Visibility::Public(VisPublic {
-                pub_token: Default::default(),
-            })
-        });
         tokens.extend(quote! {
-            #vis mod #name {
-                #dirs
-                #files
-            }
+            #dirs
+            #files
         });
     }
 }
@@ -61,21 +55,15 @@ impl ToTokens for Directory {
 /// # `static_res!` macro
 /// ```
 /// # use static_res::static_res;
-/// #[static_res("tests/**")]
-/// pub mod res {}
+/// static_res! { "tests/**" }
 ///
 /// # fn main() {
-/// assert!(res::tests::test_txt == include_bytes!("../tests/test.txt"));
-/// assert!(res::tests::folder::test_txt == b"yet another test");
+/// assert!(tests::test_txt == include_bytes!("../tests/test.txt"));
+/// assert!(tests::folder::test_txt == b"yet another test");
 /// # }
 /// ```
-#[proc_macro_attribute]
-pub fn static_res(attr: TokenStream1, tokens: TokenStream1) -> TokenStream1 {
-    // mod
-    let item_mod = parse_macro_input!(tokens as ItemMod);
-    let vis = item_mod.vis;
-    let ident = item_mod.ident;
-
+#[proc_macro]
+pub fn static_res(attr: TokenStream1) -> TokenStream1 {
     // attr
     let attr = parse_macro_input!(attr as AttributeArgs);
     assert!(attr.len() == 1, "Exactly one attribute was expected");
@@ -86,11 +74,7 @@ pub fn static_res(attr: TokenStream1, tokens: TokenStream1) -> TokenStream1 {
 
     // build a directory tree
 
-    let mut files = Directory {
-        name: ident.to_string().into(),
-        vis: Some(vis),
-        ..Default::default()
-    };
+    let mut files = Directory::default();
     for file in globwalk::glob_builder(pattern)
         .max_depth(10)
         .follow_links(true)
