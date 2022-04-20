@@ -7,9 +7,9 @@ use std::{collections::HashMap, ffi::OsString};
 use syn::{parse_macro_input, AttributeArgs, Lit, NestedMeta};
 
 fn convert_string_to_ident(string: &str) -> Ident {
-    let string = string.replace(".", "_");
-    let string = string.replace(",", "_");
-    let string = string.replace("-", "_");
+    let string = string.replace('.', "_");
+    let string = string.replace(',', "_");
+    let string = string.replace('-', "_");
     Ident::new(&string, Span::call_site())
 }
 
