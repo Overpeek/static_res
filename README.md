@@ -1,6 +1,6 @@
 # `static_res!` macro
 
-```
+```rust
 static_res! { "tests/**" }
 
 fn main() {
